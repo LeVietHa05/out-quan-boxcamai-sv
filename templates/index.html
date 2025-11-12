@@ -10,6 +10,10 @@
     <div class="container">
         <header>
             <h1>Object Detection Dashboard</h1>
+            <nav class="nav-tabs">
+                <button class="tab-btn active" data-tab="detections">Detections</button>
+                <button class="tab-btn" data-tab="clients">Clients</button>
+            </nav>
             <div class="stats">
                 <div class="stat-card">
                     <h3>Total Detections</h3>
@@ -20,6 +24,10 @@
                     <div class="stat-value" id="recent-detections">0</div>
                 </div>
                 <div class="stat-card">
+                    <h3>Active Clients</h3>
+                    <div class="stat-value" id="active-clients">0</div>
+                </div>
+                <div class="stat-card">
                     <h3>Active Classes</h3>
                     <div class="stat-value" id="active-classes">0</div>
                 </div>
@@ -27,7 +35,11 @@
         </header>
 
         <div class="controls">
-            <div class="filter-controls">
+            <div class="filter-controls" id="detections-controls">
+                <label for="client-filter">Filter by Client:</label>
+                <select id="client-filter">
+                    <option value="">All Clients</option>
+                </select>
                 <label for="class-filter">Filter by Class:</label>
                 <select id="class-filter">
                     <option value="">All Classes</option>
@@ -41,29 +53,58 @@
                 </select>
                 <button id="refresh-btn">Refresh</button>
             </div>
+            <div class="client-controls" id="clients-controls" style="display: none;">
+                <button id="add-client-btn" class="btn-primary">Add New Client</button>
+                <button id="refresh-clients-btn">Refresh Clients</button>
+            </div>
         </div>
 
-        <div class="detections-container">
-            <table id="detections-table">
-                <thead>
-                    <tr>
-                        <th>Time</th>
-                        <th>Class</th>
-                        <th>Confidence</th>
-                        <th>Image</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="detections-body">
-                    <!-- Detection rows will be inserted here -->
-                </tbody>
-            </table>
+        <!-- Detections Tab Content -->
+        <div id="detections-tab" class="tab-content">
+            <div class="detections-container">
+                <table id="detections-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Client</th>
+                            <th>Class</th>
+                            <th>Confidence</th>
+                            <th>Image</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detections-body">
+                        <!-- Detection rows will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination">
+                <button id="prev-page" disabled>Previous</button>
+                <span id="page-info">Page 1</span>
+                <button id="next-page">Next</button>
+            </div>
         </div>
 
-        <div class="pagination">
-            <button id="prev-page" disabled>Previous</button>
-            <span id="page-info">Page 1</span>
-            <button id="next-page">Next</button>
+        <!-- Clients Tab Content -->
+        <div id="clients-tab" class="tab-content" style="display: none;">
+            <div class="detections-container">
+                <table id="clients-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Location</th>
+                            <th>Status</th>
+                            <th>Detections</th>
+                            <th>Last Seen</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clients-body">
+                        <!-- Client rows will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -73,6 +114,16 @@
             <span class="close">&times;</span>
             <div id="modal-content">
                 <!-- Detection details will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Client Detail Modal -->
+    <div id="client-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="client-modal-close">&times;</span>
+            <div id="client-modal-content">
+                <!-- Client form will be inserted here -->
             </div>
         </div>
     </div>

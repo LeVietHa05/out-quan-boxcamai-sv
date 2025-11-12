@@ -7,8 +7,8 @@ import os
 import json
 from datetime import datetime
 from sqlalchemy.orm import sessionmaker
-from database_setup import Detection, init_database, get_session
-import config
+from database_setup import Detection, Client, init_database, get_session
+import config as config
 
 app = Flask(__name__, static_folder='web', template_folder='templates')
 CORS(app)  # Enable CORS for web UI
@@ -53,6 +53,33 @@ def receive_detection():
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
 
+        # Get or create client
+        client_id = data.get('client_id')
+        client_name = data.get('client_name')
+        client = None
+
+        if client_id or client_name:
+            session = Session()
+            if client_id:
+                client = session.query(Client).filter(Client.id == client_id).first()
+            elif client_name:
+                client = session.query(Client).filter(Client.name == client_name).first()
+
+            # Create client if not found
+            if not client and client_name:
+                client = Client(
+                    name=client_name,
+                    latitude=data.get('client_latitude'),
+                    longitude=data.get('client_longitude'),
+                    ip_address=request.remote_addr
+                )
+                session.add(client)
+                session.commit()
+                client_id = client.id
+            elif client:
+                client_id = client.id
+            session.close()
+
         # Save image to server directory
         image_filename = data.get('image_path', image_file.filename)
         image_path = os.path.join(config.SERVER_IMAGES_DIR, image_filename)
@@ -69,7 +96,8 @@ def receive_detection():
             bbox_y=int(data.get('bbox_y', 0)),
             bbox_width=int(data.get('bbox_width', 0)),
             bbox_height=int(data.get('bbox_height', 0)),
-            metadata_json=json.dumps(data.get('metadata', {}))
+            metadata_json=json.dumps(data.get('metadata', {})),
+            client_id=client_id
         )
 
         session.add(detection)
@@ -90,6 +118,8 @@ def get_detections():
 
         # Get query parameters for filtering
         class_name = request.args.get('class')
+        client_id = request.args.get('client_id')
+        client_name = request.args.get('client_name')
         limit = int(request.args.get('limit', 100))
         offset = int(request.args.get('offset', 0))
 
@@ -98,6 +128,13 @@ def get_detections():
         if class_name:
             query = query.filter(Detection.class_name == class_name)
 
+        if client_id:
+            query = query.filter(Detection.client_id == int(client_id))
+
+        if client_name:
+            # Join with Client table to filter by client name
+            query = query.join(Client).filter(Client.name == client_name)
+
         # Order by timestamp (most recent first)
         detections = query.order_by(Detection.timestamp.desc()).offset(offset).limit(limit).all()
         session.close()
@@ -105,7 +142,7 @@ def get_detections():
         # Convert to JSON-serializable format
         result = []
         for det in detections:
-            result.append({
+            detection_data = {
                 'id': det.id,
                 'timestamp': det.timestamp.isoformat(),
                 'class_name': det.class_name,
@@ -116,7 +153,19 @@ def get_detections():
                 'bbox_width': det.bbox_width,
                 'bbox_height': det.bbox_height,
                 'metadata': json.loads(det.metadata_json) if det.metadata_json else {}
-            })
+            }
+
+            # Add client information if available
+            if det.client:
+                detection_data['client'] = {
+                    'id': det.client.id,
+                    'name': det.client.name,
+                    'latitude': det.client.latitude,
+                    'longitude': det.client.longitude,
+                    'is_detect_enabled': det.client.is_detect_enabled
+                }
+
+            result.append(detection_data)
 
         return jsonify(result)
 
@@ -129,28 +178,55 @@ def get_detection_stats():
     try:
         session = Session()
 
+        # Get query parameters for filtering
+        client_id = request.args.get('client_id')
+        client_name = request.args.get('client_name')
+
+        # Base query
+        base_query = session.query(Detection)
+
+        if client_id:
+            base_query = base_query.filter(Detection.client_id == int(client_id))
+        elif client_name:
+            base_query = base_query.join(Client).filter(Client.name == client_name)
+
         # Get total count
-        total_detections = session.query(Detection).count()
+        total_detections = base_query.count()
 
         # Get detections by class
         class_counts = {}
-        results = session.query(Detection.class_name).all()
+        results = base_query.with_entities(Detection.class_name).all()
         for (class_name,) in results:
             class_counts[class_name] = class_counts.get(class_name, 0) + 1
 
         # Get recent detections (last 24 hours)
         from datetime import timedelta
         yesterday = datetime.now() - timedelta(days=1)
-        recent_detections = session.query(Detection).filter(
-            Detection.timestamp >= yesterday
-        ).count()
+        recent_detections = base_query.filter(Detection.timestamp >= yesterday).count()
+
+        # Get client statistics
+        client_stats = {}
+        client_results = session.query(Client).all()
+        for client in client_results:
+            client_detections = session.query(Detection).filter(Detection.client_id == client.id).count()
+            client_stats[client.name] = {
+                'id': client.id,
+                'detections': client_detections,
+                'latitude': client.latitude,
+                'longitude': client.longitude,
+                'is_detect_enabled': client.is_detect_enabled,
+                'last_seen': client.updated_at.isoformat() if client.updated_at else None
+            }
+        active_clients = session.query(Client).filter(Client.is_detect_enabled == True).count()
 
         session.close()
 
         return jsonify({
             'total_detections': total_detections,
             'recent_detections': recent_detections,
-            'detections_by_class': class_counts
+            'detections_by_class': class_counts,
+            'clients': client_stats,
+            'active_clients' : active_clients
         })
 
     except Exception as e:
@@ -189,9 +265,166 @@ def get_detection(detection_id):
                 'bbox_height': detection.bbox_height,
                 'metadata': json.loads(detection.metadata_json) if detection.metadata_json else {}
             }
+
+            # Add client information if available
+            if detection.client:
+                result['client'] = {
+                    'id': detection.client.id,
+                    'name': detection.client.name,
+                    'latitude': detection.client.latitude,
+                    'longitude': detection.client.longitude,
+                    'is_detect_enabled': detection.client.is_detect_enabled
+                }
+
             return jsonify(result)
         else:
             return jsonify({'error': 'Detection not found'}), 404
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Client management endpoints
+@app.route('/api/clients', methods=['GET'])
+def get_clients():
+    """Get all clients"""
+    try:
+        session = Session()
+        clients = session.query(Client).all()
+        session.close()
+
+        result = []
+        for client in clients:
+            result.append({
+                'id': client.id,
+                'name': client.name,
+                'latitude': client.latitude,
+                'longitude': client.longitude,
+                'is_detect_enabled': client.is_detect_enabled,
+                'ip_address': client.ip_address,
+                'created_at': client.created_at.isoformat() if client.created_at else None,
+                'updated_at': client.updated_at.isoformat() if client.updated_at else None
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+@app.route('/api/clients', methods=['POST'])
+def create_client():
+    """Create a new client"""
+    try:
+        data = request.get_json()
+
+        if not data or 'name' not in data:
+            return jsonify({'error': 'Client name is required'}), 400
+
+        session = Session()
+
+        # Check if client already exists
+        existing_client = session.query(Client).filter(Client.name == data['name']).first()
+        if existing_client:
+            session.close()
+            return jsonify({'error': 'Client with this name already exists'}), 409
+
+        client = Client(
+            name=data['name'],
+            latitude=data.get('latitude'),
+            longitude=data.get('longitude'),
+            is_detect_enabled=data.get('is_detect_enabled', True),
+            ip_address=data.get('ip_address')
+        )
+
+        session.add(client)
+        session.commit()
+        client_id = client.id
+        session.close()
+
+        return jsonify({'message': 'Client created successfully', 'id': client_id}), 201
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/clients/<int:client_id>', methods=['GET'])
+def get_client(client_id): 
+    """get info of a client"""
+    try: 
+        session = Session()
+        client = session.query(Client).filter(Client.id == client_id).first()
+        
+        if not client:
+            return jsonify({'error': 'Client not found'}), 404
+        
+        session.close()
+        
+        result = {
+            "name": client.name,
+            "latitude": client.latitude,
+            "longitude": client.longitude,
+            "is_detect_enabled": client.is_detect_enabled
+        }
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+    
+@app.route('/api/clients/<int:client_id>', methods=['PUT'])
+def update_client(client_id):
+    """Update a client"""
+    try:
+        data = request.get_json()
+
+        session = Session()
+        client = session.query(Client).filter(Client.id == client_id).first()
+    
+        if not client:
+            session.close()
+            return jsonify({'error': 'Client not found'}), 404
+
+        # Update fields
+        if 'name' in data:
+            # Check if new name conflicts with existing client
+            existing_client = session.query(Client).filter(Client.name == data['name'], Client.id != client_id).first()
+            if existing_client:
+                session.close()
+                return jsonify({'error': 'Client with this name already exists'}), 409
+            client.name = data['name']
+
+        if 'latitude' in data:
+            client.latitude = data['latitude']
+        if 'longitude' in data:
+            client.longitude = data['longitude']
+        if 'is_detect_enabled' in data:
+            client.is_detect_enabled = data['is_detect_enabled']
+        if 'ip_address' in data:
+            client.ip_address = data['ip_address']
+
+        session.commit()
+        session.close()
+
+        return jsonify({'message': 'Client updated successfully'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/clients/<int:client_id>', methods=['DELETE'])
+def delete_client(client_id):
+    """Delete a client"""
+    try:
+        session = Session()
+        client = session.query(Client).filter(Client.id == client_id).first()
+
+        if not client:
+            session.close()
+            return jsonify({'error': 'Client not found'}), 404
+
+        session.delete(client)
+        session.commit()
+        session.close()
+
+        return jsonify({'message': 'Client deleted successfully'}), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500

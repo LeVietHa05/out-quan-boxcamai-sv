@@ -1,10 +1,26 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text
-from sqlalchemy.orm import declarative_base
+from datetime import datetime
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean, ForeignKey
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.orm import sessionmaker
 from config import DATABASE_URL, SERVER_IMAGES_DIR
 import os
 
 Base = declarative_base()
+
+class Client(Base):
+    __tablename__ = 'clients'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False, unique=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    is_detect_enabled = Column(Boolean, default=True, nullable=False)
+    ip_address = Column(String(45), nullable=True)  # IPv4 or IPv6
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship to detections
+    detections = relationship("Detection", back_populates="client")
 
 class Detection(Base):
     __tablename__ = 'detections'
@@ -19,6 +35,10 @@ class Detection(Base):
     bbox_width = Column(Integer, nullable=False)
     bbox_height = Column(Integer, nullable=False)
     metadata_json = Column(Text)  # JSON string for additional data
+    client_id = Column(Integer, ForeignKey('clients.id'), nullable=True)
+
+    # Relationship to client
+    client = relationship("Client", back_populates="detections")
 
 def init_database():
     """Initialize the database and create tables"""

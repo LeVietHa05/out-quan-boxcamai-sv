@@ -7,11 +7,11 @@ SERVER_PORT = 5000
 SERVER_URL = f"http://{SERVER_HOST}:{SERVER_PORT}/detect"
 
 # Database Configuration
-DATABASE_URL = 'sqlite:///server/detections.db'
+DATABASE_URL = 'sqlite:///detections.db'
 
 # Image Storage Configuration
 IMAGES_DIR = 'captured_images'  # Client images
-SERVER_IMAGES_DIR = os.path.join(os.path.dirname(__file__), 'server', 'captured_images')  # Server images
+SERVER_IMAGES_DIR = os.path.join(os.path.dirname(__file__), 'captured_images')  # Server images
 MAX_IMAGES_PER_DETECTION = 5  # Maximum images to keep per detection class
 
 # Detection Configuration
@@ -64,6 +64,7 @@ CLASS_NAMES = [
 ]
 
 CLASS_NAMES2 = ['ambulance', 'bicycle', 'bird', 'bus', 'camel', 'car', 'cow', 'deer', 'drone', 'dump truck', 'excavators', 'goat', 'horse', 'motorcycle', 'person', 'sheep', 'truck', 'wheel loader']
+
 # Create directories if they don't exist
-os.makedirs(IMAGES_DIR, exist_ok=True)
+# os.makedirs(IMAGES_DIR, exist_ok=True)
 os.makedirs(SERVER_IMAGES_DIR, exist_ok=True)
