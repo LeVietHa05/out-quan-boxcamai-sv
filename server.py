@@ -333,7 +333,11 @@ def create_client():
             latitude=data.get('latitude'),
             longitude=data.get('longitude'),
             is_detect_enabled=data.get('is_detect_enabled', True),
-            ip_address=data.get('ip_address')
+            ip_address=data.get('ip_address'),
+            roi_x1=data.get('roi_x1'),
+            roi_y1=data.get('roi_y1'),
+            roi_x2=data.get('roi_x2'),
+            roi_y2=data.get('roi_y2')
         )
 
         session.add(client)
@@ -362,7 +366,11 @@ def get_client(client_id):
             "name": client.name,
             "latitude": client.latitude,
             "longitude": client.longitude,
-            "is_detect_enabled": client.is_detect_enabled
+            "is_detect_enabled": client.is_detect_enabled,
+            "roi_x1" : client.roi_x1,
+            "roi_y1" : client.roi_y1,
+            "roi_x2" : client.roi_x2,
+            "roi_y2" : client.roi_y2
         }
         return jsonify(result), 200
 
@@ -400,6 +408,14 @@ def update_client(client_id):
             client.is_detect_enabled = data['is_detect_enabled']
         if 'ip_address' in data:
             client.ip_address = data['ip_address']
+        if 'roi_x1' in data:
+            client.roi_x1 = data['roi_x1']
+        if 'roi_x2' in data:
+            client.roi_x2 = data['roi_x2']
+        if 'roi_y1' in data:
+            client.roi_y1 = data['roi_y1']
+        if 'roi_y2' in data:
+            client.roi_y2 = data['roi_y2']
 
         session.commit()
         session.close()

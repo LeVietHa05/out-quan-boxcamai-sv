@@ -414,6 +414,76 @@ h1 {
     border-top: 1px solid #eee;
 }
 
+/* ROI Canvas styles */
+.roi-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+#roi-canvas {
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    cursor: crosshair;
+    background-color: #f8f9fa;
+}
+
+.roi-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    align-items: center;
+}
+
+.roi-coords {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.roi-coords label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 12px;
+    font-weight: normal;
+    margin: 0;
+}
+
+.roi-coords input {
+    width: 60px;
+    padding: 4px 6px;
+    font-size: 12px;
+    text-align: center;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+.btn-secondary {
+    background-color: #95a5a6;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.btn-secondary:hover {
+    background-color: #7f8c8d;
+}
+
+.form-help {
+    color: #7f8c8d;
+    font-size: 12px;
+    margin-top: 5px;
+    text-align: center;
+}
+
 .info-item {
     background: #f8f9fa;
     padding: 15px;

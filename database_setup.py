@@ -18,7 +18,11 @@ class Client(Base):
     ip_address = Column(String(45), nullable=True)  # IPv4 or IPv6
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
+   # ✅ vùng nhận diện (Region of Interest)
+    roi_x1 = Column(Float, nullable=True)
+    roi_y1 = Column(Float, nullable=True)
+    roi_x2 = Column(Float, nullable=True)
+    roi_y2 = Column(Float, nullable=True)
     # Relationship to detections
     detections = relationship("Detection", back_populates="client")
 

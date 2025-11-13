@@ -389,20 +389,22 @@ function openClientModal(clientId = null) {
         <h2>${title}</h2>
         <form id="client-form">
             <div class="form-group">
-                <label for="client-name">Name:</label>
+                <label for="client-name">Name (seri):</label>
                 <input type="text" id="client-name" required>
             </div>
-            <div class="form-group">
-                <label for="client-latitude">Latitude:</label>
-                <input type="number" id="client-latitude" step="0.0001" placeholder="Optional">
-            </div>
-            <div class="form-group">
-                <label for="client-longitude">Longitude:</label>
-                <input type="number" id="client-longitude" step="0.0001" placeholder="Optional">
-            </div>
-            <div class="form-group">
-                <label for="client-ip">IP Address:</label>
-                <input type="text" id="client-ip" placeholder="Optional">
+            <div style='display: flex; justify-content:space-between'>
+                <div class="form-group">
+                    <label for="client-latitude">Latitude:</label>
+                    <input type="number" id="client-latitude" step="0.0001" placeholder="Optional">
+                </div>
+                <div class="form-group">
+                    <label for="client-longitude">Longitude:</label>
+                    <input type="number" id="client-longitude" step="0.0001" placeholder="Optional">
+                </div>
+                <div class="form-group">
+                    <label for="client-ip">IP Address:</label>
+                    <input type="text" id="client-ip" placeholder="Optional">
+                </div>
             </div>
             <div class="form-group">
                 <label class="checkbox-label">
@@ -410,6 +412,24 @@ function openClientModal(clientId = null) {
                     Detection Enabled
                 </label>
             </div>
+
+            <div class="form-group">
+                <label>Region of Interest (ROI) to detect:</label>
+                <div class="roi-container">
+                    <canvas id="roi-canvas" width="640" height="480"></canvas>
+                    <div class="roi-controls">
+                        <button type="button" id="clear-roi-btn" class="btn-secondary">Clear ROI</button>
+                        <div class="roi-coords">
+                            <label>X1: <input type="number" id="roi-x1" step="0.01" readonly></label>
+                            <label>Y1: <input type="number" id="roi-y1" step="0.01" readonly></label>
+                            <label>X2: <input type="number" id="roi-x2" step="0.01" readonly></label>
+                            <label>Y2: <input type="number" id="roi-y2" step="0.01" readonly></label>
+                        </div>
+                    </div>
+                </div>
+                <small class="form-help">Click and drag on the canvas to define the region of interest for detection.</small>
+            </div>
+
             <div class="form-actions">
                 <button type="submit" class="btn-primary">${isEdit ? 'Update' : 'Create'} Client</button>
                 <button type="button" onclick="document.getElementById('client-modal').style.display='none'">Cancel</button>
@@ -423,6 +443,9 @@ function openClientModal(clientId = null) {
         saveClient(clientId);
     };
 
+    // Initialize ROI canvas
+    initROICanvas();
+
     // Load client data if editing
     if (isEdit) {
         loadClientForEdit(clientId);
@@ -435,12 +458,24 @@ async function loadClientForEdit(clientId) {
     try {
         const response = await fetch(`/api/clients/${clientId}`);
         const client = await response.json();
+        console.log(client)
 
         document.getElementById('client-name').value = client.name;
         document.getElementById('client-latitude').value = client.latitude || '';
         document.getElementById('client-longitude').value = client.longitude || '';
         document.getElementById('client-ip').value = client.ip_address || '';
         document.getElementById('client-enabled').checked = client.is_detect_enabled;
+
+        // Load ROI coordinates
+        document.getElementById('roi-x1').value = client.roi_x1 || '';
+        document.getElementById('roi-y1').value = client.roi_y1 || '';
+        document.getElementById('roi-x2').value = client.roi_x2 || '';
+        document.getElementById('roi-y2').value = client.roi_y2 || '';
+
+        // Draw ROI rectangle on canvas if coordinates exist
+        if (client.roi_x1 && client.roi_y1 && client.roi_x2 && client.roi_y2) {
+            drawROIRectangle(client.roi_x1, client.roi_y1, client.roi_x2, client.roi_y2);
+        }
 
     } catch (error) {
         console.error('Error loading client:', error);
@@ -454,8 +489,14 @@ async function saveClient(clientId) {
         latitude: parseFloat(document.getElementById('client-latitude').value) || null,
         longitude: parseFloat(document.getElementById('client-longitude').value) || null,
         ip_address: document.getElementById('client-ip').value || null,
-        is_detect_enabled: document.getElementById('client-enabled').checked
+        is_detect_enabled: document.getElementById('client-enabled').checked,
+        roi_x1: parseFloat(document.getElementById('roi-x1').value) || null,
+        roi_y1: parseFloat(document.getElementById('roi-y1').value) || null,
+        roi_x2: parseFloat(document.getElementById('roi-x2').value) || null,
+        roi_y2: parseFloat(document.getElementById('roi-y2').value) || null
     };
+
+    console.log(clientData)
 
     try {
         const url = clientId ? `/api/clients/${clientId}` : '/api/clients';
@@ -512,6 +553,121 @@ async function deleteClient(clientId, clientName) {
 
 function editClient(clientId) {
     openClientModal(clientId);
+}
+
+// ROI Canvas functionality
+let roiCanvas, roiCtx;
+let isDrawing = false;
+let startX, startY, endX, endY;
+
+function initROICanvas() {
+    roiCanvas = document.getElementById('roi-canvas');
+    roiCtx = roiCanvas.getContext('2d');
+
+    // Clear canvas
+    roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+
+    // Add event listeners
+    roiCanvas.addEventListener('mousedown', startDrawing);
+    roiCanvas.addEventListener('mousemove', draw);
+    roiCanvas.addEventListener('mouseup', stopDrawing);
+    roiCanvas.addEventListener('mouseout', stopDrawing);
+
+    // Clear ROI button
+    document.getElementById('clear-roi-btn').addEventListener('click', clearROI);
+}
+
+function startDrawing(e) {
+    isDrawing = true;
+    const rect = roiCanvas.getBoundingClientRect();
+    startX = Math.max(0, Math.min(e.clientX - rect.left, roiCanvas.width));
+    startY = Math.max(0, Math.min(e.clientY - rect.top, roiCanvas.height));
+}
+
+function draw(e) {
+    if (!isDrawing) return;
+
+    const rect = roiCanvas.getBoundingClientRect();
+    endX = Math.max(0, Math.min(e.clientX - rect.left, roiCanvas.width));
+    endY = Math.max(0, Math.min(e.clientY - rect.top, roiCanvas.height));
+
+    // Clear canvas
+    roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+
+    // Draw rectangle
+    roiCtx.strokeStyle = '#e74c3c';
+    roiCtx.lineWidth = 2;
+    roiCtx.strokeRect(startX, startY, endX - startX, endY - startY);
+
+    // Update coordinate inputs
+    updateROICoordinates(startX, startY, endX, endY);
+}
+
+function stopDrawing(e) {
+    if (!isDrawing) return;
+    isDrawing = false;
+
+    // Clamp coordinates to canvas bounds
+    const clampedStartX = Math.max(0, Math.min(startX, roiCanvas.width));
+    const clampedStartY = Math.max(0, Math.min(startY, roiCanvas.height));
+    const clampedEndX = Math.max(0, Math.min(endX, roiCanvas.width));
+    const clampedEndY = Math.max(0, Math.min(endY, roiCanvas.height));
+
+    // Ensure coordinates are in correct order (x1 < x2, y1 < y2)
+    const x1 = Math.min(clampedStartX, clampedEndX);
+    const y1 = Math.min(clampedStartY, clampedEndY);
+    const x2 = Math.max(clampedStartX, clampedEndX);
+    const y2 = Math.max(clampedStartY, clampedEndY);
+
+    // Only draw if there's a valid rectangle (not just a point)
+    if (x2 > x1 && y2 > y1) {
+        // Draw final rectangle
+        roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+        roiCtx.strokeStyle = '#e74c3c';
+        roiCtx.lineWidth = 2;
+        roiCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+        // Update coordinate inputs
+        updateROICoordinates(x1, y1, x2, y2);
+    } else {
+        // Clear canvas if invalid rectangle
+        roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+        clearROI();
+    }
+}
+
+function updateROICoordinates(x1, y1, x2, y2) {
+    // Ensure coordinates are within canvas bounds
+    const clampedX1 = Math.max(0, Math.min(x1, roiCanvas.width));
+    const clampedY1 = Math.max(0, Math.min(y1, roiCanvas.height));
+    const clampedX2 = Math.max(0, Math.min(x2, roiCanvas.width));
+    const clampedY2 = Math.max(0, Math.min(y2, roiCanvas.height));
+
+    document.getElementById('roi-x1').value = Math.floor(clampedX1.toFixed(2));
+    document.getElementById('roi-y1').value = Math.floor(clampedY1.toFixed(2));
+    document.getElementById('roi-x2').value = Math.floor(clampedX2.toFixed(2));
+    document.getElementById('roi-y2').value = Math.floor(clampedY2.toFixed(2));
+}
+
+function drawROIRectangle(x1, y1, x2, y2) {
+    if (!roiCtx) return;
+
+    roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+    roiCtx.strokeStyle = '#e74c3c';
+    roiCtx.lineWidth = 2;
+    roiCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+}
+
+function clearROI() {
+    if (roiCtx) {
+        roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+    }
+
+    // Clear coordinate inputs
+    document.getElementById('roi-x1').value = '';
+    document.getElementById('roi-y1').value = '';
+    document.getElementById('roi-x2').value = '';
+    document.getElementById('roi-y2').value = '';
 }
 
 // Auto-refresh functionality (optional)
