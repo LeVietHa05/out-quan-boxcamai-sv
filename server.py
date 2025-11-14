@@ -351,18 +351,47 @@ def create_client():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/clients/<int:client_id>', methods=['GET'])
-def get_client(client_id): 
+def get_client(client_id):
     """get info of a client"""
-    try: 
+    try:
         session = Session()
         client = session.query(Client).filter(Client.id == client_id).first()
-        
+
         if not client:
             return jsonify({'error': 'Client not found'}), 404
-        
+
         session.close()
-        
+
         result = {
+            "id": client.id,
+            "name": client.name,
+            "latitude": client.latitude,
+            "longitude": client.longitude,
+            "is_detect_enabled": client.is_detect_enabled,
+            "roi_x1" : client.roi_x1,
+            "roi_y1" : client.roi_y1,
+            "roi_x2" : client.roi_x2,
+            "roi_y2" : client.roi_y2
+        }
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/clients/by-name/<string:client_name>', methods=['GET'])
+def get_client_by_name(client_name):
+    """Get client info by name (for clients that don't know their ID)"""
+    try:
+        session = Session()
+        client = session.query(Client).filter(Client.name == client_name).first()
+
+        if not client:
+            return jsonify({'error': 'Client not found'}), 404
+
+        session.close()
+
+        result = {
+            "id": client.id,
             "name": client.name,
             "latitude": client.latitude,
             "longitude": client.longitude,
