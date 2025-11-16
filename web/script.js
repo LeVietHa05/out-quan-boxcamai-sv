@@ -94,6 +94,7 @@ function handleLimitChange() {
 function refreshData() {
     loadStats();
     loadDetections();
+    loadClients();
 }
 
 function changePage(direction) {
@@ -684,4 +685,4 @@ function stopAutoRefresh() {
 }
 
 // Start auto-refresh when page loads
-// startAutoRefresh();
+startAutoRefresh();

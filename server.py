@@ -6,7 +6,7 @@ from flask_cors import CORS
 import os
 import json
 from datetime import datetime
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, joinedload
 from database_setup import Detection, Client, init_database, get_session
 import config as config
 
@@ -136,7 +136,7 @@ def get_detections():
             query = query.join(Client).filter(Client.name == client_name)
 
         # Order by timestamp (most recent first)
-        detections = query.order_by(Detection.timestamp.desc()).offset(offset).limit(limit).all()
+        detections = query.options(joinedload(Detection.client)).order_by(Detection.timestamp.desc()).offset(offset).limit(limit).all()
         session.close()
 
         # Convert to JSON-serializable format
@@ -170,6 +170,7 @@ def get_detections():
         return jsonify(result)
 
     except Exception as e:
+        print(e)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/detections/stats', methods=['GET'])
@@ -230,6 +231,7 @@ def get_detection_stats():
         })
 
     except Exception as e:
+        print (e)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/images/<path:filename>', methods=['GET'])
@@ -249,7 +251,7 @@ def get_detection(detection_id):
     """Get a specific detection by ID"""
     try:
         session = Session()
-        detection = session.query(Detection).filter(Detection.id == detection_id).first()
+        detection = session.query(Detection).options(joinedload(Detection.client)).filter(Detection.id == detection_id).first()
         session.close()
 
         if detection:
