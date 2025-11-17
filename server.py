@@ -417,6 +417,24 @@ def get_client(client_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/clients/<int:client_id>/last-frame', methods=['GET'])
+def get_frame(client_id):
+    """get the last detected frame of a client"""
+    try:
+        session = Session()
+        detection = session.query(Detection).filter(
+            Detection.client_id == client_id).order_by(Detection.timestamp.desc()).first()
+
+        session.close()
+        result = {
+            "image": detection.image_path
+        }
+        return jsonify(result), 200 
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/clients/by-name/<string:client_name>', methods=['GET'])
 def get_client_by_name(client_name):
     """Get client info by name (for clients that don't know their ID)"""

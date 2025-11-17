@@ -6,7 +6,7 @@ let currentClientFilter = '';
 let currentTab = 'detections';
 
 // Initialize the application when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     initializeApp();
 });
 
@@ -42,11 +42,11 @@ function setupModal() {
     const modal = document.getElementById('detail-modal');
     const closeBtn = document.querySelector('.close');
 
-    closeBtn.onclick = function() {
+    closeBtn.onclick = function () {
         modal.style.display = 'none';
     };
 
-    window.onclick = function(event) {
+    window.onclick = function (event) {
         if (event.target == modal) {
             modal.style.display = 'none';
         }
@@ -346,8 +346,8 @@ function displayClients(clients) {
             <td>${client.name}</td>
             <td>
                 ${client.latitude && client.longitude ?
-                    `${client.latitude.toFixed(4)}, ${client.longitude.toFixed(4)}` :
-                    'Not set'}
+            `${client.latitude.toFixed(4)}, ${client.longitude.toFixed(4)}` :
+            'Not set'}
             </td>
             <td>
                 <span class="status ${client.is_detect_enabled ? 'active' : 'inactive'}">
@@ -368,11 +368,11 @@ function setupClientModal() {
     const modal = document.getElementById('client-modal');
     const closeBtn = document.getElementById('client-modal-close');
 
-    closeBtn.onclick = function() {
+    closeBtn.onclick = function () {
         modal.style.display = 'none';
     };
 
-    window.onclick = function(event) {
+    window.onclick = function (event) {
         if (event.target == modal) {
             modal.style.display = 'none';
         }
@@ -439,13 +439,13 @@ function openClientModal(clientId = null) {
     `;
 
     const form = document.getElementById('client-form');
-    form.onsubmit = function(e) {
+    form.onsubmit = function (e) {
         e.preventDefault();
         saveClient(clientId);
     };
 
     // Initialize ROI canvas
-    initROICanvas();
+    initROICanvas(clientId);
 
     // Load client data if editing
     if (isEdit) {
@@ -472,7 +472,7 @@ async function loadClientForEdit(clientId) {
         document.getElementById('roi-y1').value = client.roi_y1 || '';
         document.getElementById('roi-x2').value = client.roi_x2 || '';
         document.getElementById('roi-y2').value = client.roi_y2 || '';
-
+        drawCanvasWithImage()
         // Draw ROI rectangle on canvas if coordinates exist
         if (client.roi_x1 && client.roi_y1 && client.roi_x2 && client.roi_y2) {
             drawROIRectangle(client.roi_x1, client.roi_y1, client.roi_x2, client.roi_y2);
@@ -560,8 +560,10 @@ function editClient(clientId) {
 let roiCanvas, roiCtx;
 let isDrawing = false;
 let startX, startY, endX, endY;
+let canvasBGImage = new Image();
+let roi = { x1: null, y1: null, x2: null, y2: null };
 
-function initROICanvas() {
+function initROICanvas(clientId) {
     roiCanvas = document.getElementById('roi-canvas');
     roiCtx = roiCanvas.getContext('2d');
 
@@ -576,6 +578,30 @@ function initROICanvas() {
 
     // Clear ROI button
     document.getElementById('clear-roi-btn').addEventListener('click', clearROI);
+
+    getLastDetectImage(clientId)
+}
+
+async function getLastDetectImage(clientID) {
+    try {
+
+        let res = await fetch(`/api/clients/${clientID}/last-frame`)
+        let data = await res.json()
+        if (data.image) {
+            canvasBGImage.src = '/api/images/' + data.image;
+            canvasBGImage.onload = () => {
+                drawCanvasWithImage();
+            }
+        } 
+    } catch (e) {
+        console.log(e)
+    }
+}
+
+function drawCanvasWithImage() {
+
+    // 1. Vẽ ảnh nền lên canvas
+    roiCtx.drawImage(canvasBGImage, 0, 0, roiCanvas.width, roiCanvas.height);
 }
 
 function startDrawing(e) {
@@ -593,7 +619,7 @@ function draw(e) {
     endY = Math.max(0, Math.min(e.clientY - rect.top, roiCanvas.height));
 
     // Clear canvas
-    roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+    drawCanvasWithImage();
 
     // Draw rectangle
     roiCtx.strokeStyle = '#e74c3c';
@@ -623,7 +649,7 @@ function stopDrawing(e) {
     // Only draw if there's a valid rectangle (not just a point)
     if (x2 > x1 && y2 > y1) {
         // Draw final rectangle
-        roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+        drawCanvasWithImage();
         roiCtx.strokeStyle = '#e74c3c';
         roiCtx.lineWidth = 2;
         roiCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
@@ -632,7 +658,7 @@ function stopDrawing(e) {
         updateROICoordinates(x1, y1, x2, y2);
     } else {
         // Clear canvas if invalid rectangle
-        roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+        drawCanvasWithImage()
         clearROI();
     }
 }
@@ -653,7 +679,6 @@ function updateROICoordinates(x1, y1, x2, y2) {
 function drawROIRectangle(x1, y1, x2, y2) {
     if (!roiCtx) return;
 
-    roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
     roiCtx.strokeStyle = '#e74c3c';
     roiCtx.lineWidth = 2;
     roiCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
@@ -661,7 +686,7 @@ function drawROIRectangle(x1, y1, x2, y2) {
 
 function clearROI() {
     if (roiCtx) {
-        roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+        drawCanvasWithImage()
     }
 
     // Clear coordinate inputs
