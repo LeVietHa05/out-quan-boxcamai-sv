@@ -1,14 +1,15 @@
+import config as config
+from database_setup import Detection, Client, init_database, get_session
+from sqlalchemy.orm import sessionmaker, joinedload
+from sqlalchemy import func
+from datetime import datetime
+import json
+import os
+from flask_cors import CORS
+from flask import Flask, request, jsonify, send_file, render_template
 import sys
 sys.path.insert(0, '..')
 
-from flask import Flask, request, jsonify, send_file, render_template
-from flask_cors import CORS
-import os
-import json
-from datetime import datetime
-from sqlalchemy.orm import sessionmaker, joinedload
-from database_setup import Detection, Client, init_database, get_session
-import config as config
 
 app = Flask(__name__, static_folder='web', template_folder='templates')
 CORS(app)  # Enable CORS for web UI
@@ -17,20 +18,24 @@ CORS(app)  # Enable CORS for web UI
 engine = init_database()
 Session = sessionmaker(bind=engine)
 
+
 @app.route('/')
 def index():
     """Serve the main web UI"""
     return render_template('index.html')
+
 
 @app.route('/style.css')
 def serve_css():
     """Serve CSS file"""
     return app.send_static_file('style.css')
 
+
 @app.route('/script.js')
 def serve_js():
     """Serve JavaScript file"""
     return app.send_static_file('script.js')
+
 
 @app.route('/api/detections', methods=['POST'])
 def receive_detection():
@@ -61,9 +66,11 @@ def receive_detection():
         if client_id or client_name:
             session = Session()
             if client_id:
-                client = session.query(Client).filter(Client.id == client_id).first()
+                client = session.query(Client).filter(
+                    Client.id == client_id).first()
             elif client_name:
-                client = session.query(Client).filter(Client.name == client_name).first()
+                client = session.query(Client).filter(
+                    Client.name == client_name).first()
 
             # Create client if not found
             if not client and client_name:
@@ -85,30 +92,39 @@ def receive_detection():
         image_path = os.path.join(config.SERVER_IMAGES_DIR, image_filename)
         image_file.save(image_path)
 
+        class_names = data["class_name"]
+        confidences = data["confidence"]
+        xs = data["bbox_x"]
+        ys = data["bbox_y"]
+        ws = data["bbox_width"]
+        hs = data["bbox_height"]
+
         # Create detection record
         session = Session()
-        detection = Detection(
-            timestamp=datetime.fromisoformat(data['timestamp']),
-            class_name=data['class_name'],
-            confidence=float(data['confidence']),
-            image_path=image_filename,  # Use the saved filename
-            bbox_x=int(data.get('bbox_x', 0)),
-            bbox_y=int(data.get('bbox_y', 0)),
-            bbox_width=int(data.get('bbox_width', 0)),
-            bbox_height=int(data.get('bbox_height', 0)),
-            metadata_json=json.dumps(data.get('metadata', {})),
-            client_id=client_id
-        )
+        for i in range(len(class_names)):
+            detection = Detection(
+                timestamp=datetime.fromisoformat(data['timestamp']),
+                class_name=class_names[i],
+                confidence=float(confidences[i]),
+                image_path=image_filename,
+                bbox_x=int(xs[i]),
+                bbox_y=int(ys[i]),
+                bbox_width=int(ws[i]),
+                bbox_height=int(hs[i]),
+                metadata_json=json.dumps(data.get('metadata', {})),
+                client_id=client_id
+            )
 
-        session.add(detection)
+            session.add(detection)
+
         session.commit()
-        detection_id = detection.id
         session.close()
 
-        return jsonify({'message': 'Detection saved successfully', 'id': detection_id}), 201
+        return jsonify({'message': 'Detection saved successfully'}), 201
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/detections', methods=['GET'])
 def get_detections():
@@ -136,7 +152,8 @@ def get_detections():
             query = query.join(Client).filter(Client.name == client_name)
 
         # Order by timestamp (most recent first)
-        detections = query.options(joinedload(Detection.client)).order_by(Detection.timestamp.desc()).offset(offset).limit(limit).all()
+        detections = query.options(joinedload(Detection.client)).order_by(
+            Detection.timestamp.desc()).offset(offset).limit(limit).all()
         session.close()
 
         # Convert to JSON-serializable format
@@ -173,6 +190,7 @@ def get_detections():
         print(e)
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/detections/stats', methods=['GET'])
 def get_detection_stats():
     """Get detection statistics"""
@@ -187,9 +205,11 @@ def get_detection_stats():
         base_query = session.query(Detection)
 
         if client_id:
-            base_query = base_query.filter(Detection.client_id == int(client_id))
+            base_query = base_query.filter(
+                Detection.client_id == int(client_id))
         elif client_name:
-            base_query = base_query.join(Client).filter(Client.name == client_name)
+            base_query = base_query.join(Client).filter(
+                Client.name == client_name)
 
         # Get total count
         total_detections = base_query.count()
@@ -203,13 +223,15 @@ def get_detection_stats():
         # Get recent detections (last 24 hours)
         from datetime import timedelta
         yesterday = datetime.now() - timedelta(days=1)
-        recent_detections = base_query.filter(Detection.timestamp >= yesterday).count()
+        recent_detections = base_query.filter(
+            Detection.timestamp >= yesterday).count()
 
         # Get client statistics
         client_stats = {}
         client_results = session.query(Client).all()
         for client in client_results:
-            client_detections = session.query(Detection).filter(Detection.client_id == client.id).count()
+            client_detections = session.query(Detection).filter(
+                Detection.client_id == client.id).count()
             client_stats[client.name] = {
                 'id': client.id,
                 'detections': client_detections,
@@ -218,7 +240,8 @@ def get_detection_stats():
                 'is_detect_enabled': client.is_detect_enabled,
                 'last_seen': client.updated_at.isoformat() if client.updated_at else None
             }
-        active_clients = session.query(Client).filter(Client.is_detect_enabled == True).count()
+        active_clients = session.query(Client).filter(
+            Client.is_detect_enabled == True).count()
 
         session.close()
 
@@ -227,12 +250,13 @@ def get_detection_stats():
             'recent_detections': recent_detections,
             'detections_by_class': class_counts,
             'clients': client_stats,
-            'active_clients' : active_clients
+            'active_clients': active_clients
         })
 
     except Exception as e:
-        print (e)
+        print(e)
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/images/<path:filename>', methods=['GET'])
 def get_image(filename):
@@ -246,12 +270,14 @@ def get_image(filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/detections/<int:detection_id>', methods=['GET'])
 def get_detection(detection_id):
     """Get a specific detection by ID"""
     try:
         session = Session()
-        detection = session.query(Detection).options(joinedload(Detection.client)).filter(Detection.id == detection_id).first()
+        detection = session.query(Detection).options(joinedload(
+            Detection.client)).filter(Detection.id == detection_id).first()
         session.close()
 
         if detection:
@@ -285,17 +311,24 @@ def get_detection(detection_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Client management endpoints
+
 @app.route('/api/clients', methods=['GET'])
 def get_clients():
     """Get all clients"""
     try:
         session = Session()
-        clients = session.query(Client).all()
-        session.close()
+        clients_with_count = (
+            session.query(Client, func.count(
+                Detection.id).label('detection_count'))
+            # outer để client không có detection vẫn ra 0
+            .outerjoin(Detection, Detection.client_id == Client.id)
+            # nhóm theo client
+            .group_by(Client.id)
+            .all()
+        )
 
         result = []
-        for client in clients:
+        for client, count in clients_with_count:
             result.append({
                 'id': client.id,
                 'name': client.name,
@@ -304,14 +337,15 @@ def get_clients():
                 'is_detect_enabled': client.is_detect_enabled,
                 'ip_address': client.ip_address,
                 'created_at': client.created_at.isoformat() if client.created_at else None,
-                'updated_at': client.updated_at.isoformat() if client.updated_at else None
+                'updated_at': client.updated_at.isoformat() if client.updated_at else None,
+                'client_detections': count
             })
 
         return jsonify(result)
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
+
 
 @app.route('/api/clients', methods=['POST'])
 def create_client():
@@ -325,7 +359,8 @@ def create_client():
         session = Session()
 
         # Check if client already exists
-        existing_client = session.query(Client).filter(Client.name == data['name']).first()
+        existing_client = session.query(Client).filter(
+            Client.name == data['name']).first()
         if existing_client:
             session.close()
             return jsonify({'error': 'Client with this name already exists'}), 409
@@ -352,6 +387,7 @@ def create_client():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/clients/<int:client_id>', methods=['GET'])
 def get_client(client_id):
     """get info of a client"""
@@ -370,22 +406,24 @@ def get_client(client_id):
             "latitude": client.latitude,
             "longitude": client.longitude,
             "is_detect_enabled": client.is_detect_enabled,
-            "roi_x1" : client.roi_x1,
-            "roi_y1" : client.roi_y1,
-            "roi_x2" : client.roi_x2,
-            "roi_y2" : client.roi_y2
+            "roi_x1": client.roi_x1,
+            "roi_y1": client.roi_y1,
+            "roi_x2": client.roi_x2,
+            "roi_y2": client.roi_y2
         }
         return jsonify(result), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/clients/by-name/<string:client_name>', methods=['GET'])
 def get_client_by_name(client_name):
     """Get client info by name (for clients that don't know their ID)"""
     try:
         session = Session()
-        client = session.query(Client).filter(Client.name == client_name).first()
+        client = session.query(Client).filter(
+            Client.name == client_name).first()
 
         if not client:
             return jsonify({'error': 'Client not found'}), 404
@@ -398,17 +436,17 @@ def get_client_by_name(client_name):
             "latitude": client.latitude,
             "longitude": client.longitude,
             "is_detect_enabled": client.is_detect_enabled,
-            "roi_x1" : client.roi_x1,
-            "roi_y1" : client.roi_y1,
-            "roi_x2" : client.roi_x2,
-            "roi_y2" : client.roi_y2
+            "roi_x1": client.roi_x1,
+            "roi_y1": client.roi_y1,
+            "roi_x2": client.roi_x2,
+            "roi_y2": client.roi_y2
         }
         return jsonify(result), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
-    
+
+
 @app.route('/api/clients/<int:client_id>', methods=['PUT'])
 def update_client(client_id):
     """Update a client"""
@@ -417,7 +455,7 @@ def update_client(client_id):
 
         session = Session()
         client = session.query(Client).filter(Client.id == client_id).first()
-    
+
         if not client:
             session.close()
             return jsonify({'error': 'Client not found'}), 404
@@ -425,7 +463,8 @@ def update_client(client_id):
         # Update fields
         if 'name' in data:
             # Check if new name conflicts with existing client
-            existing_client = session.query(Client).filter(Client.name == data['name'], Client.id != client_id).first()
+            existing_client = session.query(Client).filter(
+                Client.name == data['name'], Client.id != client_id).first()
             if existing_client:
                 session.close()
                 return jsonify({'error': 'Client with this name already exists'}), 409
@@ -456,6 +495,7 @@ def update_client(client_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/clients/<int:client_id>', methods=['DELETE'])
 def delete_client(client_id):
     """Delete a client"""
@@ -476,8 +516,10 @@ def delete_client(client_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 if __name__ == '__main__':
     print("Starting Object Detection Server...")
-    print(f"Server will be available at http://{config.SERVER_HOST}:{config.SERVER_PORT}")
+    print(
+        f"Server will be available at http://{config.SERVER_HOST}:{config.SERVER_PORT}")
     print(f"Images will be stored in: {config.SERVER_IMAGES_DIR}")
     app.run(host=config.SERVER_HOST, port=config.SERVER_PORT, debug=True)

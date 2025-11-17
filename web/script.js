@@ -354,7 +354,7 @@ function displayClients(clients) {
                     ${client.is_detect_enabled ? 'Active' : 'Inactive'}
                 </span>
             </td>
-            <td>${client.detections || 0}</td>
+            <td>${client.client_detections || 0}</td>
             <td>${client.updated_at ? formatTimestamp(client.updated_at) : 'Never'}</td>
             <td>
                 <button class="edit-btn" onclick="editClient(${client.id})">Edit</button>
