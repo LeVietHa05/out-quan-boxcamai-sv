@@ -403,7 +403,7 @@ function openClientModal(clientId = null) {
                     <input type="number" id="client-longitude" step="0.0001" placeholder="Optional">
                 </div>
                 <div class="form-group">
-                    <label for="client-ip">IP Address:</label>
+                    <label for="client-ip">Camera local IP Address:</label>
                     <input type="text" id="client-ip" placeholder="Optional">
                 </div>
             </div>

@@ -409,7 +409,8 @@ def get_client(client_id):
             "roi_x1": client.roi_x1,
             "roi_y1": client.roi_y1,
             "roi_x2": client.roi_x2,
-            "roi_y2": client.roi_y2
+            "roi_y2": client.roi_y2,
+            "ip_address": client.ip_address
         }
         return jsonify(result), 200
 
